@@ -1,0 +1,1378 @@
+substitutions:
+  ha:       "\U0000e935" #\U000F07D0" # home assistant F07D0
+  no_ha:    "\U000F1A47"
+  wifi_25:  "\U0000e931" # wifi signal from 25% to 1%  F091F
+  wifi_50:  "\U0000e932" # wifi signal from 50% to 25% F0922
+  wifi_75:  "\U0000e933" # wifi signal from 75% to 50% F0925
+  wifi_100: "\U0000e934" # wifi signal from 100% to 75% or disable F0928
+  low_wifi: "\U000F0920"
+  no_wifi:  "\U000F092B"
+  humidity_icon: "\U0000e938"
+  temperature_icon:  "\U0000e939"
+  eco_icon: "\U000F032A"
+  noise_level: 
+  lx_threshold_min: "10" # minimum lux
+  lx_threshold_max: "100" # maximum lus
+  minimum_backlight: "10" # percentage
+
+esphome:
+  name: s3-co2
+  friendly_name: S3-CO2
+  build_path: s3
+  platformio_options:
+    board_build.flash_mode: dio
+    board_build.f_flash: 80000000L
+    board_build.f_cpu: 240000000L
+  on_boot:
+    priority: 800.0
+    then:
+      - delay: 5s
+#      - lvgl.widget.hide: boot_screen
+      - light.turn_on:
+          id: status_led
+          blue: 0%
+          red: 0%
+          green: 60%
+          brightness: 60%
+          effect: low pulse
+
+esp32:
+  board: esp32-s3-devkitc-1
+  flash_size: 4MB
+#  variant: ESP32S3
+  framework:
+    type: esp-idf
+#    version: recommended
+    sdkconfig_options:
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: "y"
+      CONFIG_ESP32S3_DATA_CACHE_64KB: "y"
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B: "y"
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
+      CONFIG_SPIRAM_RODATA: y
+# Enable logging
+#logger:
+#  level: none
+#  logs:
+#    touch: DEBUG
+#    display: DEBUG
+
+# Enable Home Assistant API
+api:
+  on_client_connected:
+    - if:
+        condition:
+          lambda: 'return (0 == client_info.find("Home Assistant "));'
+        then:
+          - lvgl.label.update: 
+              id: ha_status
+              text_color: 0x0000ff
+   
+  on_client_disconnected:
+    - if:
+        condition:
+          lambda: 'return (0 == client_info.find("Home Assistant "));'
+        then:
+          - lvgl.label.update: 
+              id: ha_status
+              text_color: 0x444444
+
+  encryption:
+    key: "sTo/UA8mI/NFcH21tu00sY8HMbVTZ8Zs8Ibichjq0+0="
+
+#ota:
+#  - platform: esphome
+#    password: "da72125eeb0023ba66342e3cca70259a"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "S3-Co2 Fallback Hotspot"
+    password: "fUhMpR1yE0BP"
+
+captive_portal:
+
+psram:
+  mode: octal
+  speed: 80MHZ
+
+i2c:
+  sda: GPIO2
+  scl: GPIO1
+  scan: true
+  id: bus_a
+
+# SCD41 sensor – measures CO₂, temperature, humidity
+
+text_sensor:
+# Reports WiFi name
+  - platform: wifi_info
+    ssid:
+      name: "WiFi"
+      id: wifi_name
+      on_value:
+        then:
+          - lvgl.label.update:
+              id: wifi_name_label
+              text: !lambda 'return x.c_str();'
+
+# Reports IP
+  - platform: wifi_info
+    ip_address:
+      name: "IP"
+      id: ip_
+      on_value:
+        then:
+          - lvgl.label.update:
+              id: ip_label
+              text: !lambda 'return x.c_str();'
+
+sensor:
+  - platform: internal_temperature
+    accuracy_decimals: 2
+    name: "core_temperature"
+    id: core_temperature
+    update_interval: 60s
+    unit_of_measurement: °C
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: core_temperature_label
+            text:
+              format: "%.1f °C"
+              args: [ 'x' ]
+
+  - platform: uptime
+    name: "Uptime"
+    id: climat_upt
+    update_interval: 60s
+    on_value:
+      then:
+
+  - platform: wifi_signal
+    id: wifi_signal_percent
+    update_interval: 30s
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "%"
+    on_value: 
+      then:
+        - lvgl.label.update:
+            id: wifi_status
+            text_color: !lambda |-
+              if (id(wifi_signal_percent).state > 0) {
+              return lv_color_hex(0x00FF00);
+              }
+              return lv_color_hex(0x333333);
+            text: !lambda |-
+              if (id(wifi_signal_percent).state > 0 && id(wifi_signal_percent).state < 26) {
+              return "${wifi_25}";
+              } else if (id(wifi_signal_percent).state > 25 && id(wifi_signal_percent).state < 51) {
+              return "${wifi_50}";
+              } else if (id(wifi_signal_percent).state > 50 && id(wifi_signal_percent).state < 76) {
+              return "${wifi_75}";
+              } else if (id(wifi_signal_percent).state > 75) {
+              return "${wifi_100}";
+              }
+              return "${wifi_100}";
+        - lvgl.label.update:
+            id: wifi_level_label
+            text:
+              format: "%.0f dB"
+              args: [ 'x' ]
+  - platform: scd4x
+    id: scd41
+    co2:
+      name: "CO2"
+      accuracy_decimals: 0
+      unit_of_measurement: "ppm"
+      id: scd41co2
+      on_value:
+        then:
+          - lvgl.arc.update:
+              id: arc_co2
+              value: !lambda return x;
+          - lvgl.label.update:
+              id: co2_label
+              text:
+                format: "%.0f"
+                args: [ 'x' ]
+              text_color: !lambda |-
+                if (id(scd41co2).state > 0 && id(scd41co2).state <= 400) {
+                return lv_color_hex(0x999999);
+                } else if (id(scd41co2).state > 400 && id(scd41co2).state <= 600) {
+                return lv_color_hex(0x00cc00);
+                } else if (id(scd41co2).state > 600 && id(scd41co2).state <= 800) {
+                return lv_color_hex(0xffff00);
+                } else if (id(scd41co2).state > 800 && id(scd41co2).state <= 1000) {
+                return lv_color_hex(0xffa200);
+                } else if (id(scd41co2).state > 1000 && id(scd41co2).state <= 1200) {
+                return lv_color_hex(0xe65c00);
+                }else if (id(scd41co2).state > 1200) {
+                return lv_color_hex(0xbb0000);
+                }                      
+
+    temperature:
+      name: "Temperature"
+      accuracy_decimals: 1
+      id: scd41_temp
+      unit_of_measurement: "°C"
+#      filters:
+#        - filter_out: 0.0
+#        - median:
+#            window_size: 3
+#            send_every: 3
+#            send_first_at: 1
+      filters:
+        - calibrate_linear:
+            - 0.0 -> 0.0
+            - 30.8 -> 25.0
+#            - 30.5 -> 23.2
+      on_value:
+        then:
+          - lvgl.arc.update:
+              id: arc_temp
+              value: !lambda return x;
+          - lvgl.label.update:
+              id: temp_label
+              text:
+                format: "%.1f"
+                args: [ 'x' ]
+
+    humidity:
+      name: "Humidity"
+      accuracy_decimals: 1
+      unit_of_measurement: "%"
+      id: scd41_humi
+      on_value:
+        then:
+          - lvgl.label.update:
+              id: humi_label
+              text:
+                format: "%.1f"
+                args: [ 'x' ]
+      filters:
+      - filter_out: 0.0
+      - median:
+          window_size: 3
+          send_every: 3
+          send_first_at: 1
+    update_interval: 30s
+
+  - platform: sound_level
+    # Ties this sound level computation to the I2S mic above
+    microphone: mic_i2s
+    # With passive=false the mic will start automatically.
+    # If later you add I²S speaker/voice features, consider passive:true to avoid duplex conflicts.
+    passive: false
+
+    # How long each measurement integrates over (trade-off between responsiveness and stability). Ranges from 50ms to 60s. Defaults to 1000ms.
+    measurement_duration: 150ms
+    
+    peak: #Captures the highest instantaneous amplitude during the measurement window. Useful for detecting sudden spikes (claps, bangs), but not for perceived loudness.
+      name: "Peak Loudness (dBFS)"
+      id: LAeq_1min
+      internal: true
+      filters:
+#        - exponential_moving_average: #This filter smooths out noisy sensor readings by applying an Exponential Moving Average (EMA).
+#            #Instead of reporting every raw value (which can fluctuate a lot), it blends the new reading with the previous smoothed value.
+#            # Formula smoothed=α×new+(1−α)×previous
+#            alpha: 0.4 #Controls responsiveness vs stability. At 0.4, about 40% of the new value influences the result each update. This is a good responsive behaviour for spikes to show quickly.
+#            send_every: 1 #how often to send an update to Home Assistant (in number of raw readings) so lower value = more traffic
+        - calibrate_linear:
+            - -73.0 -> 38.0
+            - -52.0 -> 64.0
+            - -57.0 -> 57.6
+            - -43.5 -> 85.0
+            - -30.0 -> 91.4
+            - -16.4 -> 100.7
+      on_value:
+        then:
+          - lvgl.arc.update:
+              id: LApeak
+              value: !lambda return x;
+          - lvgl.bar.update:
+              id: eq_level_1
+              value: !lambda return id(LAeq_1min).state;
+          - lvgl.bar.update:
+              id: eq_level_3
+              value: !lambda return id(LAeq_1min).state;
+          - lvgl.bar.update:
+              id: eq_level_5
+              value: !lambda return id(LAeq_1min).state;
+    rms: #RMS (Root Mean Square): Represents the average energy of the signal over the measurement window as defined above (e.g., 500 ms).
+      name: "Average Loudness (dBFS)"
+      id: rms_level
+      internal: True
+      filters:
+#        - exponential_moving_average:
+#            alpha: 0.2 #For average loudness a bit more stability is good
+#            send_every: 1
+        - calibrate_linear: #Calibrated using the UNI-T UT353 and same values used above for peak loudness
+            - -73.0 -> 38.0
+            - -52.0 -> 64.0
+            - -57.0 -> 57.6
+            - -43.5 -> 85.0
+            - -30.0 -> 91.4
+            - -16.4 -> 100.7
+      on_value:
+        then:
+          - lvgl.bar.update:
+              id: eq_level_2
+              value: !lambda return id(rms_level).state;
+          - lvgl.bar.update:
+              id: eq_level_4
+              value: !lambda return id(rms_level).state;
+          - lvgl.bar.update:
+              id: eq_level_6
+              value: !lambda return id(rms_level).state;
+
+          - lvgl.arc.update:
+              id: arc_noise
+              value: !lambda return x;
+          - lvgl.label.update:
+              id: noise_label
+              text:
+                format: "%.1f"
+                args: [ 'x' ]
+          - lvgl.label.update:
+              id: noise_level_label
+              text_color: !lambda |-
+                if (id(LAeq_1min).state > 0 && id(LAeq_1min).state < 30) {
+                return lv_color_hex(0x00cc00);
+                } else if (id(LAeq_1min).state > 30 && id(LAeq_1min).state < 70) {
+                return lv_color_hex(0x006600);
+                } else if (id(LAeq_1min).state > 70 && id(LAeq_1min).state < 90) {
+                return lv_color_hex(0xffff00);
+                } else if (id(LAeq_1min).state > 90 && id(LAeq_1min).state < 130) {
+                return lv_color_hex(0xff5c00);
+                }else if (id(LAeq_1min).state > 130) {
+                return lv_color_hex(0x880000);
+                }                      
+              text: !lambda |-
+                if (id(LAeq_1min).state > 0 && id(LAeq_1min).state < 30) {
+                return "Тихо";
+                } else if (id(LAeq_1min).state > 30 && id(LAeq_1min).state < 70) {
+                return "Норма";
+                } else if (id(LAeq_1min).state > 70 && id(LAeq_1min).state < 90) {
+                return "Шумно";
+                } else if (id(LAeq_1min).state > 90 && id(LAeq_1min).state < 130) {
+                return "Очень шумно";
+                } else if (id(LAeq_1min).state > 130) {
+                return "Опасно";
+                }
+
+  - platform: tsl2561
+    name: "TSL2561 Ambient Light"
+    id: level_light
+    address: 0x39
+    update_interval: 1s
+    filters:
+      - calibrate_linear: #Calibrated using the MOBIPLUS WT81B
+          - 0.0 -> 0.0
+          - 4.0 -> 11.8
+          - 7.3 -> 34.5
+          - 10.3 -> 81.2
+          - 129.3 -> 190.5
+
+    on_value:
+      then:
+        - light.turn_on:
+            id: backlight
+            brightness: !lambda |-
+              return id(level_light).state / 130.0;
+        - lvgl.label.update:
+            id: lux_level
+            text:
+              format: "%.1f lux"
+              args: [ 'x' ]
+
+#  - platform: template
+#    name: "Raw touch value"
+#    lambda: |-
+#        return id(esp32_touch_pad).get_value();
+#    update_interval: 3s
+
+
+# Manually set a reference CO₂ value for calibration
+number:
+  - platform: template
+    name: "CO₂ Calibration Reference"
+    id: co2_calibration_value
+    optimistic: true
+    min_value: 400
+    max_value: 2000
+    step: 1
+    initial_value: 400
+    unit_of_measurement: "ppm"
+    icon: "mdi:molecule-co2"
+
+# Buttons to trigger forced calibration or factory reset
+button:
+  - platform: template
+    name: "Calibrate CO₂ Sensor"
+    icon: "mdi:calibration"
+    on_press:
+      then:
+        - lambda: |-
+            id(scd41).perform_forced_calibration(id(co2_calibration_value).state);
+#        - logger.log: 
+#            format: "Forced calibration with reference %d ppm"
+#            args: ["int(id(co2_calibration_value).state)"]
+
+  - platform: template
+    name: "CO₂ Sensor Factory Reset"
+    icon: "mdi:restore"
+    id: factory_reset_button
+    on_press:
+      then:
+        - scd4x.factory_reset: scd41
+#        - logger.log: "SCD41 sensor factory reset initiated"
+
+# Optional: Switch for enabling/disabling auto calibration
+
+  - platform: template
+    name: "Next"
+    id: next_page
+    on_press:
+      then:
+        - lvgl.page.next:
+            animation: FADE_OUT
+            time: 500ms
+
+switch:
+  - platform: template
+    name: "CO₂_Auto_Calibration"
+    id: co2_auto_calibration
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    icon: "mdi:calibration"
+    on_turn_on:
+      - lambda: 'id(scd41).set_automatic_self_calibration(true);'
+#      - logger.log: "Enabled automatic self-calibration"
+    on_turn_off:
+      - lambda: 'id(scd41).set_automatic_self_calibration(false);'
+#      - logger.log: "Disabled automatic self-calibration"
+
+time:
+  - platform: homeassistant
+    timezone: "Europe/Moscow"
+    id: esptime
+
+font:
+  - file: "display/gfonts/Roboto-Regular.ttf"
+    id: roboto48
+    size: 48
+    glyphs: |-
+      !"%()+=,-_.:³°<>μ0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЬЫЪЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ абвгдеёжзийклмнопрстуфхцчшщьыъэюяabcdefghijklmnopqrstuvwxyz'/&
+
+  - file: "display/gfonts/Roboto-Regular.ttf"
+    id: roboto24
+    size: 24
+    glyphs: |-
+      !"%()+=,-_.:³°<>μ0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧЩЬЫЪЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ абвгдеёжзийклмнопрстуфхцчщьыъэюяabcdefghijklmnopqrstuvwxyz'/&
+
+  - file: "display/gfonts/Roboto-Regular.ttf"
+    id: roboto32
+    size: 32
+    glyphs: |-
+      !"%()+=,-_.:³°<>μ0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЬЫЪЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ абвгдеёжзийклмнопрстуфхцчшщьыъэюяabcdefghijklmnopqrstuvwxyz'/&
+
+  - file: "gfonts://Roboto"
+    id: roboto20
+    size: 20
+    bpp: 4
+    glyphs: |-
+      !"%()+=,-_.:³°<>μ0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЬЫЪЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ абвгдеёжзийклмнопрстуфхцчшщьыъэюяabcdefghijklmnopqrstuvwxyz'
+    ignore_missing_glyphs: true
+
+  - file: "gfonts://Roboto"
+    id: roboto60
+    size: 60
+    glyphs: |-
+      !"%()+=,-_.:³°μ0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЬЫЪЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ абвгдеёжзийклмнопрстуфхцчшщьыъэюяabcdefghijklmnopqrstuvwxyz'/&
+
+  - file: "display/gfonts/icons_v2.ttf"
+    id: icons_24
+    size: 24
+    bpp: 4
+    glyphs: [
+      "\U0000e935", # home assistant
+      "\U0000e931", # wifi signal from 25% to 1%
+      "\U0000e932", # wifi signal from 50% to 25%
+      "\U0000e933", # wifi signal from 75% to 50%
+      "\U0000e934", # wifi signal from 100% to 75% or disable
+      "\U0000e938", # humidity
+      "\U0000e939", #temperature_icon
+    ]
+
+esp32_touch:
+  setup_mode: false
+  id: esp32_touch_1
+  measurement_duration: 0.25ms  # Much lower than the 8ms default
+  sleep_duration: 0.5ms
+
+binary_sensor:
+  - platform: esp32_touch #touch Pad 'Touch Pad on ESP32' (T8): value=88669, benchmark=4194303, difference=-4105634 (set threshold < -4105634 to detect touch)
+    name: "Touch Pad on ESP32"
+    id: esp32_touch_pad
+    pin: GPIO8
+    threshold: 80000 #1200
+    on_press:
+      then:
+        - lvgl.page.next:
+
+#  - platform: analog_threshold
+#    name: "Датчик шума"
+#    id: noise
+#    threshold: 10
+#    sensor_id: Leq_id
+#    device_class: sound
+#    icon: mdi:speaker-wireless
+#    on_press: 
+#      then:
+#        - lambda: |-
+#            id(g_timer_noise)=0;
+#        - lvgl.page.show: noise_page
+#        - delay: 15s        
+            
+#  - platform: template
+#    id: binary_timer_noise
+
+i2s_audio:
+  - id: i2s_in
+    i2s_lrclk_pin: GPIO5 #WS 
+    i2s_bclk_pin: GPIO4 #SCK
+
+microphone:
+  - platform: i2s_audio
+    adc_type: external
+    id: mic_i2s
+    channel: left
+    bits_per_sample: 32bit
+    i2s_audio_id: i2s_in  
+    i2s_din_pin: GPIO39 #SD Pin INMP441 Microphone    
+#    bits_per_channel: 16bit
+    sample_rate: 16000
+    correct_dc_offset: true       
+    # Removes residual DC bias. Corrects a DC offset for microphones where the audio signal’s average amplitude is not 0. Defaults to false.
+    pdm: false                    # INMP441 is I2S, not PDM. Set this to true if your external ADC uses PDM (Pulse Density Modulation) instead of I²S. Defaults to false.
+    # Optional: improve clock accuracy for consistent levels  I2S using APLL as main I2S clock, enable it to get accurate clock. Defaults to false.
+    use_apll: true
+
+external_components:
+  - source: github://pr#10392
+    components: [mipi_spi]
+    refresh: 1h
+
+spi:
+  id: display_qspi
+  type: quad
+  clk_pin: GPIO13
+  data_pins: [GPIO12, GPIO11, GPIO10, GPIO9]
+
+display:
+#1,5" ST77916
+  - platform: mipi_spi
+    id: my_display
+    bus_mode: quad
+    model: CUSTOM
+    rotation: 0
+    spi_id: display_qspi
+    pixel_mode: 16bit
+    data_rate: 40MHz
+    color_order: rgb
+    invert_colors: true
+    dimensions:
+      height: 360
+      width: 360
+    cs_pin: GPIO7
+    reset_pin: GPIO18
+
+    auto_clear_enabled: false
+    update_interval: never
+    init_sequence:
+      - [ 0xF0, 0x28 ]
+      - [ 0xF2, 0x28 ]
+      - [ 0x73, 0xF0 ]
+      - [ 0x7C, 0xD1 ]
+      - [ 0x83, 0xE0 ]
+      - [ 0x84, 0x61 ]
+      - [ 0xF2, 0x82 ]
+      - [ 0xF0, 0x00 ]
+      - [ 0xF0, 0x01 ]
+      - [ 0xF1, 0x01 ]
+      - [ 0xB0, 0x56 ] #// VRHPS - VRHP Set: / 5.750 + (vcom offset) / default =66h
+      - [ 0xB1, 0x4D ] #/ VRHNS - VRHN Set: / -3.450 + (vcom offset) / default =4Dh
+      - [ 0xB2, 0x24 ] #// VCOMS - VCOM GND SET: 1.150 / default =2Ch
+      - [ 0xB4, 0x87 ] #/ GAMOPPS - GVDD_GVEE_SET: Negative Gamma OP Power Set (VNDAC) = -3.8, Positive Gamma OP Power Set (VPDAC) = 6.1 / default =88h
+      - [ 0xB5, 0x44 ] #// STEP14S - STEP SET1: AVCL=-4.05, AVDD=6.42 / default =45h
+      - [ 0xB6, 0x8B ] #// STEP23S - STEP SET2, VGL=-12.00, VGH/VGHS=12.0, default =89h
+      - [ 0xB7, 0x40 ]
+      - [ 0xB8, 0x86 ]
+      - [ 0xBA, 0x00 ]
+      - [ 0xBB, 0x08 ]
+      - [ 0xBC, 0x08 ]
+      - [ 0xBD, 0x00 ]
+      - [ 0xC0, 0x80 ]
+      - [ 0xC1, 0x10 ]
+      - [ 0xC2, 0x37 ]
+      - [ 0xC3, 0x80 ]
+      - [ 0xC4, 0x10 ]
+      - [ 0xC5, 0x37 ]
+      - [ 0xC6, 0xA9 ]
+      - [ 0xC7, 0x41 ]
+      - [ 0xC8, 0x01 ]
+      - [ 0xC9, 0xA9 ]
+      - [ 0xCA, 0x41 ]
+      - [ 0xCB, 0x01 ]
+      - [ 0xD0, 0x91 ]
+      - [ 0xD1, 0x68 ]
+      - [ 0xD2, 0x68 ]
+      - [ 0xF5, 0x00, 0xA5 ]
+      - [ 0xDD, 0x4F ]
+      - [ 0xDE, 0x4F ]
+      - [ 0xF1, 0x10 ]
+      - [ 0xF0, 0x00 ]
+      - [ 0xF0, 0x02 ]
+      - [ 0xE0, 0xF0, 0x0A, 0x10, 0x09, 0x09, 0x36, 0x35, 0x33, 0x4A, 0x29, 0x15, 0x15, 0x2E, 0x34 ]
+      - [ 0xE1, 0xF0, 0x0A, 0x0F, 0x08, 0x08, 0x05, 0x34, 0x33, 0x4A, 0x39, 0x15, 0x15, 0x2D, 0x33 ]
+      - [ 0xF0, 0x10 ]
+      - [ 0xF3, 0x10 ]
+      - [ 0xE0, 0x07 ]
+      - [ 0xE1, 0x00 ]
+      - [ 0xE2, 0x00 ]
+      - [ 0xE3, 0x00 ]
+      - [ 0xE4, 0xE0 ]
+      - [ 0xE5, 0x06 ]
+      - [ 0xE6, 0x21 ]
+      - [ 0xE7, 0x01 ]
+      - [ 0xE8, 0x05 ]
+      - [ 0xE9, 0x02 ]
+      - [ 0xEA, 0xDA ]
+      - [ 0xEB, 0x00 ]
+      - [ 0xEC, 0x00 ]
+      - [ 0xED, 0x0F ]
+      - [ 0xEE, 0x00 ]
+      - [ 0xEF, 0x00 ]
+      - [ 0xF8, 0x00 ]
+      - [ 0xF9, 0x00 ]
+      - [ 0xFA, 0x00 ]
+      - [ 0xFB, 0x00 ]
+      - [ 0xFC, 0x00 ]
+      - [ 0xFD, 0x00 ]
+      - [ 0xFE, 0x00 ]
+      - [ 0xFF, 0x00 ]
+      - [ 0x60, 0x40 ]
+      - [ 0x61, 0x04 ]
+      - [ 0x62, 0x00 ]
+      - [ 0x63, 0x42 ]
+      - [ 0x64, 0xD9 ]
+      - [ 0x65, 0x00 ]
+      - [ 0x66, 0x00 ]
+      - [ 0x67, 0x00 ]
+      - [ 0x68, 0x00 ]
+      - [ 0x69, 0x00 ]
+      - [ 0x6A, 0x00 ]
+      - [ 0x6B, 0x00 ]
+      - [ 0x70, 0x40 ]
+      - [ 0x71, 0x03 ]
+      - [ 0x72, 0x00 ]
+      - [ 0x73, 0x42 ]
+      - [ 0x74, 0xD8 ]
+      - [ 0x75, 0x00 ]
+      - [ 0x76, 0x00 ]
+      - [ 0x77, 0x00 ]
+      - [ 0x78, 0x00 ]
+      - [ 0x79, 0x00 ]
+      - [ 0x7A, 0x00 ]
+      - [ 0x7B, 0x00 ]
+      - [ 0x80, 0x48 ]
+      - [ 0x81, 0x00 ]
+      - [ 0x82, 0x06 ]
+      - [ 0x83, 0x02 ]
+      - [ 0x84, 0xD6 ]
+      - [ 0x85, 0x04 ]
+      - [ 0x86, 0x00 ]
+      - [ 0x87, 0x00 ]
+      - [ 0x88, 0x48 ]
+      - [ 0x89, 0x00 ]
+      - [ 0x8A, 0x08 ]
+      - [ 0x8B, 0x02 ]
+      - [ 0x8C, 0xD8 ]
+      - [ 0x8D, 0x04 ]
+      - [ 0x8E, 0x00 ]
+      - [ 0x8F, 0x00 ]
+      - [ 0x90, 0x48 ]
+      - [ 0x91, 0x00 ]
+      - [ 0x92, 0x0A ]
+      - [ 0x93, 0x02 ]
+      - [ 0x94, 0xDA ]
+      - [ 0x95, 0x04 ]
+      - [ 0x96, 0x00 ]
+      - [ 0x97, 0x00 ]
+      - [ 0x98, 0x48 ]
+      - [ 0x99, 0x00 ]
+      - [ 0x9A, 0x0C ]
+      - [ 0x9B, 0x02 ]
+      - [ 0x9C, 0xDC ]
+      - [ 0x9D, 0x04 ]
+      - [ 0x9E, 0x00 ]
+      - [ 0x9F, 0x00 ]
+      - [ 0xA0, 0x48 ]
+      - [ 0xA1, 0x00 ]
+      - [ 0xA2, 0x05 ]
+      - [ 0xA3, 0x02 ]
+      - [ 0xA4, 0xD5 ]
+      - [ 0xA5, 0x04 ]
+      - [ 0xA6, 0x00 ]
+      - [ 0xA7, 0x00 ]
+      - [ 0xA8, 0x48 ]
+      - [ 0xA9, 0x00 ]
+      - [ 0xAA, 0x07 ]
+      - [ 0xAB, 0x02 ]
+      - [ 0xAC, 0xD7 ]
+      - [ 0xAD, 0x04 ]
+      - [ 0xAE, 0x00 ]
+      - [ 0xAF, 0x00 ]
+      - [ 0xB0, 0x48 ]
+      - [ 0xB1, 0x00 ]
+      - [ 0xB2, 0x09 ]
+      - [ 0xB3, 0x02 ]
+      - [ 0xB4, 0xD9 ]
+      - [ 0xB5, 0x04 ]
+      - [ 0xB6, 0x00 ]
+      - [ 0xB7, 0x00 ]
+      - [ 0xB8, 0x48 ]
+      - [ 0xB9, 0x00 ]
+      - [ 0xBA, 0x0B ]
+      - [ 0xBB, 0x02 ]
+      - [ 0xBC, 0xDB ]
+      - [ 0xBD, 0x04 ]
+      - [ 0xBE, 0x00 ]
+      - [ 0xBF, 0x00 ]
+      - [ 0xC0, 0x10 ]
+      - [ 0xC1, 0x47 ]
+      - [ 0xC2, 0x56 ]
+      - [ 0xC3, 0x65 ]
+      - [ 0xC4, 0x74 ]
+      - [ 0xC5, 0x88 ]
+      - [ 0xC6, 0x99 ]
+      - [ 0xC7, 0x01 ]
+      - [ 0xC8, 0xBB ]
+      - [ 0xC9, 0xAA ]
+      - [ 0xD0, 0x10 ]
+      - [ 0xD1, 0x47 ]
+      - [ 0xD2, 0x56 ]
+      - [ 0xD3, 0x65 ]
+      - [ 0xD4, 0x74 ]
+      - [ 0xD5, 0x88 ]
+      - [ 0xD6, 0x99 ]
+      - [ 0xD7, 0x01 ]
+      - [ 0xD8, 0xBB ]
+      - [ 0xD9, 0xAA ]
+      - [ 0xF3, 0x01 ]
+      - [ 0xF0, 0x00 ]
+      - [ 0x21, 0x00 ]
+
+lvgl:
+  displays:
+    - my_display
+  bg_color: 0x000000
+  scrollable: false
+  buffer_size: 25%  # Минимум для LVGL
+  page_wrap: true
+  pages:
+    - id: power_page
+      height: 100%
+      width: 100%
+      align: CENTER
+      bg_color: 0x000000
+      border_width: 0
+      border_opa: 0%
+      pad_all: 0
+      widgets:
+        # CO2 state
+        - arc: 
+            align: center
+            height: 345
+            width: 345
+            arc_width: 10
+            id: arc_co2
+            #value: 75
+            min_value: 0
+            max_value: 2000
+            adjustable: true
+            arc_opa: 95%
+            arc_color: 0x333333
+            arc_rounded: true
+            indicator:
+              arc_color: 0xff2222
+              arc_width: 6
+              arc_opa: 80%
+            knob:
+              border_color: 0xff2222
+              border_width: 4
+              bg_color: 0xff2222
+              #bg_opa: COVER
+
+        # Temperature state
+        - arc: 
+            align: center
+            height: 310
+            width: 310
+            arc_width: 10
+            id: arc_temp
+            #value: 75
+            min_value: 0
+            max_value: 35
+            adjustable: true
+            arc_opa: 95%
+            arc_color: 0x333333
+            arc_rounded: true
+            indicator:
+              arc_color: 0x22ff22
+              arc_width: 6
+              arc_opa: 80%
+            knob:
+              border_color: 0x22ff22
+              border_width: 4
+              bg_color: 0x22ff22
+              #bg_opa: COVER              
+
+        # Wi-Fi status
+        - label:
+            id: wifi_status
+            align: BOTTOM_MID
+            x: 20
+            y: -30
+            text: "${wifi_100}"
+            text_color: 0x444444
+            text_font: icons_24
+
+        # Home Assistant status
+        - label:
+            id: ha_status
+            align: BOTTOM_MID
+            x: -20
+            y: -30
+            text: "${ha}"
+            text_color: 0x0044ff
+            text_font: icons_24
+        #Показания СО2
+        - label:
+            id: co2_label
+            align: CENTER
+            x: 0
+            y: 0
+            text_color: 0x999999
+            text_font: roboto60
+            text: "----"
+        - label:
+            align: CENTER
+            x: 100
+            y: 0 #25 #10
+            text_color: 0x999999
+            text_font: roboto20
+            text: "ppm"
+        - label:
+            align: CENTER
+            x: -100
+            y: 0 #25 #10
+            text_color: 0xbb2222
+            text_font: roboto24
+            text: "CO2"
+        - line:
+            points:
+              - 120, 210
+              - 240, 210
+            line_width: 3
+            line_color: 0xbb2222
+            line_rounded: true
+
+        #Показания температуры
+        - label:
+            id: temp_label
+            align: CENTER
+            x: 0
+            y: -65 #-70
+            text_color: 0x999999
+            text_font: roboto48
+            text: "--.-"
+        - label:
+            align: CENTER
+            x: 70
+            y: -65
+            text_color: 0x999999
+            text_font: roboto20
+            text: "°C"
+        - label:
+            align: CENTER
+            x: -80
+            y: -65
+            text_color: 0x22bb22
+            text_font: icons_24
+            text: "\U0000e939"
+        - line:
+            points:
+              - 120, 140
+              - 240, 140
+            line_width: 3
+            line_color: 0x22bb22
+            line_rounded: true
+
+        #Показания влажности
+        - label:
+            id: humi_label
+            align: CENTER
+            x: 0
+            y: 65
+            text_color: 0x999999
+            text_font: roboto48
+            text: "--.- "
+        - label:
+            align: CENTER
+            x: 70
+            y: 65
+            text_color: 0x999999
+            text_font: roboto20
+            text: "%"
+        - label:
+            align: CENTER
+            x: -80
+            y: 65
+            text_color: 0x2222aa
+            text_font: icons_24
+            text: "\U0000e938"
+        - line:
+            points:
+              - 120, 276
+              - 240, 276
+            line_width: 4
+            line_color: 0x2222aa
+            line_rounded: true
+
+    #Страница шумометра
+    - id: noise_page
+      height: 100%
+      width: 100%
+      align: CENTER
+      bg_color: 0x000000
+      border_width: 0
+      border_opa: 0%
+      pad_all: 0
+      widgets:
+#        - animimg:
+#            align: CENTER
+#            y: -55
+#            id: anim_id
+#            src: [ wave7, wave8, wave9, wave11, wave13, wave15, wave17, wave19, wave21, wave23, wave25, wave27, wave29, wave31, wave33, wave35 ]
+#            duration: 4000ms
+        - bar:
+            align: CENTER
+            x: -75
+            y: -60
+            width: 14
+            height: 60
+            id: eq_level_2
+            #value: 75
+            min_value: 20
+            max_value: 30
+            radius: 0
+            indicator:
+              #bg_opa: transp    # Makes the indicator part invisible
+              bg_color: 0x00ff00
+              width: 10
+              radius: 0
+        - bar:
+            align: CENTER
+            x: -45
+            y: -60
+            width: 14
+            height: 60
+            id: eq_level_1
+            #value: 75
+            min_value: 30
+            max_value: 42
+            radius: 0
+            indicator:
+              #bg_opa: transp    # Makes the indicator part invisible
+              bg_color: 0x00ff00
+              width: 10
+              radius: 0
+        - bar:
+            align: CENTER
+            x: -15
+            y: -60
+            width: 14
+            height: 60
+            id: eq_level_3
+            #value: 75
+            min_value: 30
+            max_value: 50
+            radius: 0
+            indicator:
+              #bg_opa: transp    # Makes the indicator part invisible
+              bg_color: 0x00ff00
+              width: 10
+              radius: 0
+        - bar:
+            align: CENTER
+            x: 15
+            y: -60
+            width: 14
+            height: 60
+            id: eq_level_4
+            #value: 75
+            min_value: 20
+            max_value: 30
+            radius: 0
+            indicator:
+              #bg_opa: transp    # Makes the indicator part invisible
+              bg_color: 0x00ff00
+              width: 10
+              radius: 0
+        - bar:
+            align: CENTER
+            x: 45
+            y: -60
+            width: 14
+            height: 60
+            id: eq_level_5
+            #value: 75
+            min_value: 31
+            max_value: 41
+            line_rounded: false
+            radius: 0
+            indicator:
+              #bg_opa: transp    # Makes the indicator part invisible
+              bg_color: 0x00ff00
+              width: 10
+              radius: 0
+        - bar:
+            align: CENTER
+            x: 75
+            y: -60
+            width: 14
+            height: 60
+            id: eq_level_6
+            #value: 75
+            min_value: 22
+            max_value: 30
+            radius: 0
+            indicator:
+              #bg_opa: transp    # Makes the indicator part invisible
+              bg_color: 0x00ff00
+              width: 10
+              radius: 0
+            #knob:
+              #radius: 0
+        - line:
+            points:
+              - 90, 130
+              - 270, 130
+            line_width: 4
+            line_color: 0x000000       
+        - line:
+            points:
+              - 90, 120
+              - 270, 120
+            line_width: 4
+            line_color: 0x000000
+        - line:
+            points:
+              - 90, 110
+              - 270, 110
+            line_width: 4
+            line_color: 0x000000
+        - line:
+            points:
+              - 90, 100
+              - 760, 100
+            line_width: 4
+            line_color: 0x000000
+        - line:
+            points:
+              - 90, 90
+              - 270, 90
+            line_width: 4
+            line_color: 0x000000
+        - line:
+            points:
+              - 90, 80
+              - 270, 80
+            line_width: 4
+            line_color: 0x000000
+        - line:
+            points:
+              - 90, 70
+              - 270, 70
+            line_width: 4
+            line_color: 0x000000
+        #Пиковый уровень шума
+        - arc:
+            align: center
+            height: 330
+            width: 330
+            arc_width: 10
+            id: LApeak
+            #value: 75
+            min_value: 0
+            max_value: 80
+            adjustable: true
+            arc_opa: 95%
+            arc_color: 0x333333
+            arc_rounded: true
+            anim_time: 0.5s
+            indicator:
+              arc_color: 0xff2222
+              arc_width: 6
+              arc_opa: 0%
+            knob:
+              border_color: 0xff2222
+              border_width: 4
+              bg_color: 0xff2222
+              #bg_opa: COVER
+        #Средний уровень шума
+        - arc: 
+            align: center
+            height: 330
+            width: 330
+            arc_width: 10
+            id: arc_noise
+            #value: 75
+            min_value: 0
+            max_value: 80
+            adjustable: true
+            arc_opa: 0%
+            arc_color: 0x333333
+            arc_rounded: true
+            anim_time: 0.5s
+            indicator:
+              arc_color: 0xff5c00
+              arc_width: 6
+              arc_opa: 80%
+            knob:
+              border_color: 0xff5c00
+              border_width: 4
+              bg_color: 0xff5c00
+        - label:
+            id: noise_label
+            align: CENTER
+            x: 0
+            y: 80
+            text_color: 0x999999
+            text_font: roboto60
+            text: "----"
+        - label:
+            align: CENTER
+            x: 90
+            y: 75
+            text_color: 0x999999
+            text_font: roboto20
+            text: "дБ"
+        - label:
+            id: noise_level_label
+            align: CENTER
+            x: 0
+            y: 6
+            #text_color: 0x999999
+            text_font: roboto48
+            text: "  "
+
+    - id: status_page
+      height: 100%
+      width: 100%
+      align: CENTER
+      bg_color: 0x000000
+      border_width: 0
+      border_opa: 0%
+      pad_all: 0
+      widgets:
+        - label:
+            id: lux_level
+            align: CENTER
+            x: 0
+            y: -140
+            text_color: 0x999999
+            text_font: roboto32
+            text: " "
+        - label:
+            id: core_temperature_label
+            align: CENTER
+            x: 0
+            y: -100
+            text_color: 0x999999
+            text_font: roboto32
+            text: " "
+        - label:
+            id: wifi_level_label
+            align: CENTER
+            x: 0
+            y: -60
+            text_color: 0x999999
+            text_font: roboto32
+            text: " "
+        - label:
+            align: CENTER
+            x: 0
+            y: -20
+            text_color: 0x999999
+            text_font: roboto32
+            id: wifi_name_label
+            text: " "
+        - label:
+            align: CENTER
+            x: 0
+            y: 20
+            text_color: 0x999999
+            text_font: roboto32
+            id: ip_label
+            text: " "
+        - image:
+            align: CENTER
+            y: 100
+            id: logo
+            src: logo_ntu
+
+    - id: sm1_page
+      height: 100%
+      width: 100%
+      align: CENTER
+      bg_color: 0x000000
+      border_width: 0
+      border_opa: 0%
+      pad_all: 0
+      widgets:
+        - image:
+            align: CENTER
+            id: sm1_
+            src: sm1
+    - id: sm2_page
+      height: 100%
+      width: 100%
+      align: CENTER
+      bg_color: 0x000000
+      border_width: 0
+      border_opa: 0%
+      pad_all: 0
+      widgets:
+        - image:
+            align: CENTER
+            id: sm2_
+            src: sm2
+    - id: sm3_page
+      height: 100%
+      width: 100%
+      align: CENTER
+      bg_color: 0x000000
+      border_width: 0
+      border_opa: 0%
+      pad_all: 0
+      widgets:
+        - image:
+            align: CENTER
+            id: sm3_
+            src: sm3
+
+    - id: sm5_page
+      height: 100%
+      width: 100%
+      align: CENTER
+      bg_color: 0x000000
+      border_width: 0
+      border_opa: 0%
+      pad_all: 0
+      widgets:
+        - image:
+            align: CENTER
+            id: sm5_
+            src: sm5
+
+image:
+  - file: display/images/wave/logo.png
+    id: logo_ntu
+    type: rgb565
+    transparency: alpha_channel
+    resize: 96x96
+  - file: display/images/wave/sm1__.jpg
+    id: sm1
+    type: rgb565
+    resize: 260x260
+  - file: display/images/wave/sm2__.jpg
+    id: sm2
+    type: rgb565
+    resize: 260x260
+  - file: display/images/wave/sm3__.jpg
+    id: sm3
+    type: rgb565
+    resize: 260x260
+#  - file: display/images/wave/sm4__.jpg
+#    id: sm4
+#    type: rgb565
+#    resize: 360x360
+
+  - file: display/images/wave/sm5__.jpg
+    id: sm5
+    type: rgb565
+    resize: 260x260
+
+#  - file: display/images/wave/sm6.jpg
+#    id: sm6
+#    type: rgb565
+#  - file: display/images/wave/sm7.jpg
+#    id: sm7
+#    type: rgb565
+
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    name: "Display Backlight"
+    id: backlight
+    restore_mode: ALWAYS_ON
+    gamma_correct: 1
+
+  - platform: esp32_rmt_led_strip
+    chipset: WS2812
+    rgb_order: GRB
+    pin: 
+      number: GPIO48
+    num_leds: 1
+#    rmt_channel: 4
+    id: status_led
+    name: "Status_led"
+    effects:
+      - random:
+      - flicker:
+      - addressable_rainbow:
+      - strobe:
+      - flicker:
+          name: Broad Flicker
+          alpha: 95%
+          intensity: 10%
+      - addressable_rainbow:
+          name: Fast Rainbow
+          speed: 50
+      - pulse:
+          name: "Fast Pulse"
+          transition_length: 0.5s
+          update_interval: 0.5s
+          min_brightness: 0%
+          max_brightness: 50%
+      - pulse:
+          name: "Low Pulse"
+          transition_length: 1s
+          update_interval: 1s
+          min_brightness: 0%
+          max_brightness: 50%
+
+output:
+  - platform: ledc
+    pin: 
+      number: GPIO6
+    id: backlight_pwm
+    frequency: 1000Hz
+
+    
