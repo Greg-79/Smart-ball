@@ -82,6 +82,7 @@
 7. Корпус устройства, выполненный по технологии 3D-печати (case/*all*.obj)
 
 Устройство корпуса.
+
 <img width="735" height="533" alt="image" src="https://github.com/user-attachments/assets/bc2e50ea-2e91-43cf-b19b-c8250c1b445a" />
 <img width="735" height="533" alt="image" src="https://github.com/user-attachments/assets/852a6a56-7035-4a29-a06f-13326e6df65c" />
 <img width="735" height="533" alt="image" src="https://github.com/user-attachments/assets/9f0ac4e3-2908-4370-9819-ff8b223b1cde" />
@@ -90,6 +91,9 @@
 <img width="735" height="533" alt="image" src="https://github.com/user-attachments/assets/d4128b36-be05-436c-bb02-661f21efc638" />
 <img width="735" height="533" alt="image" src="https://github.com/user-attachments/assets/d4e742a7-1f00-4ee6-b3eb-c07ddf6bac14" />
 
+Сборка
+
+<img width="735" height="533" alt="image" src="https://github.com/user-attachments/assets/742f60de-affb-4397-864d-2aa2145d9b02" />
 
 
 
