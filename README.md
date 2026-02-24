@@ -79,7 +79,19 @@
 4. Датчик уровня освещенности GY-2561 (на TSL2561) (https://aliexpress.ru/item/1005010472955275.html?shpMethod=CAINIAO_ECONOMY&sku_id=12000052524620301&spm=a2g2w.productlist.search_results.2.130d2064q6tgL2)
 5. Микрофонный модуль INMP441 (https://aliexpress.ru/item/1005010226611558.html?shpMethod=CAINIAO_SUPER_ECONOMY&ysclid=mlzod67b3144706673&sku_id=12000051594745071)
 6. Металлический контакт в качестве тач-кнопки для переключения режимов дисплея.
-7. Корпус устройства, выполненный по технологии 3D-печати.
+7. Корпус устройства, выполненный по технологии 3D-печати (case/*all*.obj)
+
+Устройство корпуса.
+<img width="735" height="533" alt="image" src="https://github.com/user-attachments/assets/bc2e50ea-2e91-43cf-b19b-c8250c1b445a" />
+<img width="735" height="533" alt="image" src="https://github.com/user-attachments/assets/852a6a56-7035-4a29-a06f-13326e6df65c" />
+<img width="735" height="533" alt="image" src="https://github.com/user-attachments/assets/9f0ac4e3-2908-4370-9819-ff8b223b1cde" />
+
+<img width="735" height="533" alt="image" src="https://github.com/user-attachments/assets/1a6de048-b265-4460-9bc9-7cd1ec1852ec" />
+<img width="735" height="533" alt="image" src="https://github.com/user-attachments/assets/d4128b36-be05-436c-bb02-661f21efc638" />
+<img width="735" height="533" alt="image" src="https://github.com/user-attachments/assets/d4e742a7-1f00-4ee6-b3eb-c07ddf6bac14" />
+
+
+
 
 
    <img width="841" height="1094" alt="image" src="https://github.com/user-attachments/assets/e11b30bc-e739-4809-a9e0-4c093b5e0f4b" />
