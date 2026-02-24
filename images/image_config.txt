@@ -1,0 +1,34 @@
+# Конфигурация изображений
+
+image:
+  - file: display/images/wave/logo.png
+    id: logo_ntu
+    type: rgb565
+    transparency: alpha_channel
+    resize: 96x96
+  - file: display/images/wave/sm1__.jpg
+    id: sm1
+    type: rgb565
+    resize: 260x260
+  - file: display/images/wave/sm2__.jpg
+    id: sm2
+    type: rgb565
+    resize: 260x260
+  - file: display/images/wave/sm3__.jpg
+    id: sm3
+    type: rgb565
+    resize: 260x260
+#  - file: display/images/wave/sm4__.jpg
+#    id: sm4
+#    type: rgb565
+#    resize: 360x360
+
+  - file: display/images/wave/sm5__.jpg
+    id: sm5
+    type: rgb565
+    resize: 260x260
+
+#  - file: display/images/wave/sm6__.jpg
+#    id: sm6
+#    type: rgb565
+
