@@ -1,1 +1,48 @@
+# конфигурация шрифтов
 
+font:
+  - file: "display/gfonts/Roboto-Regular.ttf"
+    id: roboto48
+    size: 48
+    glyphs: |-
+      !"%()+=,-_.:³°<>μ0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЬЫЪЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ абвгдеёжзийклмнопрстуфхцчшщьыъэюяabcdefghijklmnopqrstuvwxyz'/&
+
+  - file: "display/gfonts/Roboto-Regular.ttf"
+    id: roboto24
+    size: 24
+    glyphs: |-
+      !"%()+=,-_.:³°<>μ0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧЩЬЫЪЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ абвгдеёжзийклмнопрстуфхцчщьыъэюяabcdefghijklmnopqrstuvwxyz'/&
+
+  - file: "display/gfonts/Roboto-Regular.ttf"
+    id: roboto32
+    size: 32
+    glyphs: |-
+      !"%()+=,-_.:³°<>μ0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЬЫЪЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ абвгдеёжзийклмнопрстуфхцчшщьыъэюяabcdefghijklmnopqrstuvwxyz'/&
+
+  - file: "gfonts://Roboto"
+    id: roboto20
+    size: 20
+    bpp: 4
+    glyphs: |-
+      !"%()+=,-_.:³°<>μ0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЬЫЪЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ абвгдеёжзийклмнопрстуфхцчшщьыъэюяabcdefghijklmnopqrstuvwxyz'
+    ignore_missing_glyphs: true
+
+  - file: "gfonts://Roboto"
+    id: roboto60
+    size: 60
+    glyphs: |-
+      !"%()+=,-_.:³°μ0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЬЫЪЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ абвгдеёжзийклмнопрстуфхцчшщьыъэюяabcdefghijklmnopqrstuvwxyz'/&
+
+  - file: "display/gfonts/icons_v2.ttf"
+    id: icons_24
+    size: 24
+    bpp: 4
+    glyphs: [
+      "\U0000e935", # home assistant
+      "\U0000e931", # wifi signal from 25% to 1%
+      "\U0000e932", # wifi signal from 50% to 25%
+      "\U0000e933", # wifi signal from 75% to 50%
+      "\U0000e934", # wifi signal from 100% to 75% or disable
+      "\U0000e938", # humidity
+      "\U0000e939", #temperature_icon
+    ]
